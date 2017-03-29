@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Application;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Mail;
-use	Bitrix\Sale\Internals\StatusTable;
+use    Bitrix\Sale\Internals\StatusTable;
 use Bitrix\Sale\Internals\StatusLangTable;
 use Bitrix\Sale\Internals\ShipmentTable;
 
@@ -677,8 +677,7 @@ EOT;
 
         //в SendImmediate появился обработчик OnBeforeEventAdd
         //если нет подключения к сервису - Fatal
-        if(!is_object($SMS4B))
-        {
+        if (!is_object($SMS4B)) {
             return true;
         }
 
@@ -692,8 +691,7 @@ EOT;
             //отмена отправки SMS при смене статуса отгрузки
             //проблема - в модуле sale (16.0.31) для статусов отгрузок не создаются типы и шаблоны почтовых событий
             //и, соответственно, не уходит почта. Поэтому при смене статуса отгрузки используется обработчик SaleShipmentHandler
-            if(array_key_exists($id_sale_status_changed, $SMS4B->GetSaleStatus('D')))
-            {
+            if (array_key_exists($id_sale_status_changed, $SMS4B->GetSaleStatus('D'))) {
                 return true;
             }
         }
@@ -977,14 +975,14 @@ EOT;
                     } else {
                         $macro = $params[trim($userPhone, '#')];
 
-                        if($userPhone === '#ORDER_ID#')
-                        {
+                        if ($userPhone === '#ORDER_ID#') {
                             $userPhoneSend = $SMS4B->is_phone($SMS4B->GetPhoneOrder($params['ORDER_ID']));
-                        }
-                        else if ($SMS4B->is_phone($macro)) {
-                            $userPhoneSend = $SMS4B->is_phone($macro);
                         } else {
-                            $userPhoneSend = $SMS4B->SearchUserPhone($macro);
+                            if ($SMS4B->is_phone($macro)) {
+                                $userPhoneSend = $SMS4B->is_phone($macro);
+                            } else {
+                                $userPhoneSend = $SMS4B->SearchUserPhone($macro);
+                            }
                         }
                     }
 
@@ -1450,11 +1448,11 @@ EOT;
         }
 
         foreach ($arPhonesMessages as $phone => $text) {
-            if(LANG_CHARSET !== 'UTF-8')
-            {
+            if (LANG_CHARSET !== 'UTF-8') {
                 //Принудительная конвертация всей строки в UTF-8 (для возможности распознавания спец-символов) и
                 //преобразование HTML-кодов в символы
-                $text = html_entity_decode(mb_convert_encoding($text, 'UTF-8', LANG_CHARSET), ENT_COMPAT | ENT_HTML401, 'UTF-8');
+                $text = html_entity_decode(mb_convert_encoding($text, 'UTF-8', LANG_CHARSET), ENT_COMPAT | ENT_HTML401,
+                    'UTF-8');
             }
 
             $body = $SMS4B->enCodeMessage($text);
@@ -2288,12 +2286,12 @@ EOT;
      */
     public function sms4bLog($data)
     {
-        global $SMS4B;
-        if ($SMS4B->GetCurrentOption('log_enable', SITE_ID) === 'Y') {
+        //global $SMS4B;
+        //if ($SMS4B->GetCurrentOption('log_enable', SITE_ID) === 'Y') {
         $dateTime = new \Bitrix\Main\Type\DateTime();
         $data = $dateTime->toString() . ' ' . print_r($data, true) . PHP_EOL;
         file_put_contents($this->getLogFileName(), $data, FILE_APPEND | LOCK_EX);
-        }
+        //}
     }
 
     /**
@@ -2986,13 +2984,11 @@ EOT;
     public function GetSaleStatus($type = '', $lid = 'ru')
     {
         $arSt = $arFilter = array();
-        if(!Bitrix\Main\Loader::includeModule('sale'))
-        {
+        if (!Bitrix\Main\Loader::includeModule('sale')) {
             return $arSt;
         }
 
-        if(!empty($type))
-        {
+        if (!empty($type)) {
             $arFilter = array('TYPE' => $type);
         }
 

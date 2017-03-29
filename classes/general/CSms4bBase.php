@@ -931,15 +931,12 @@ EOT;
         //Регулярка найдёт любой символ, кроме разрешённых для отправки в GSM-кодировке.
         $regExpExcludeGsm = '/[^\n\r !"#$%&\'()*+,\\-.\\/0-9:;<=>?@A-Za-z]/';
 
-        if(!preg_match($regExpExcludeGsm, $message))
-        {
+        if (!preg_match($regExpExcludeGsm, $message)) {
             return self::MESSAGE_ENCODING_GSM;
+        } else {
+            return self::MESSAGE_ENCODING_UNICODE;
         }
-        else
-        {
-                return self::MESSAGE_ENCODING_UNICODE;
-            }
-        }
+    }
 
     /**
      * Декодирование сообщения
@@ -953,12 +950,9 @@ EOT;
      */
     public function decode($message, $typeEnc)
     {
-        if($typeEnc === self::MESSAGE_ENCODING_GSM)
-        {
+        if ($typeEnc === self::MESSAGE_ENCODING_GSM) {
             return self::DecodeMessageGsm($message);
-        }
-        else
-        {
+        } else {
             return self::DecodeMessageUnicode($message);
         }
     }
@@ -973,26 +967,7 @@ EOT;
     {
         $msgDecodeToUtf8 = mb_convert_encoding(self::HexToBin($message), 'UTF-8', 'UCS-2');
 
-        //Если нет спец-символов - возвращаем результат
-        if (!preg_match("/[\200-\237]/", $msgDecodeToUtf8)
-            && !preg_match("/[\241-\377]/", $msgDecodeToUtf8)
-        ) {
-            return $msgDecodeToUtf8;
-        }
-
-        //Декодируем 3-байтовые символы юникода
-        $msgDecodeToUtf8 = preg_replace("/([\340-\357])([\200-\277])([\200-\277])/e",
-            "'&#'.((ord('\\1')-224)*4096 + (ord('\\2')-128)*64 + (ord('\\3')-128)).';'",
-            $msgDecodeToUtf8
-        );
-
-        //Декодируем 2-байтовые символы юникода
-        $msgDecodeToUtf8 = preg_replace("/([\300-\337])([\200-\277])/e",
-            "'&#'.((ord('\\1')-192)*64+(ord('\\2')-128)).';'",
-            $msgDecodeToUtf8
-        );
-
-        return $msgDecodeToUtf8;
+        return mb_encode_numericentity($msgDecodeToUtf8, [0x0, 0xffff, 0, 0xffff], 'UTF-8');
     }
 
     /**
@@ -1055,12 +1030,12 @@ EOT;
     }
 
     /**
-    * Закодировать сообщение в кодировке Unicode (UCS-2).
+     * Закодировать сообщение в кодировке Unicode (UCS-2).
      *
-    * @param string $message - текст сообщения
+     * @param string $message - текст сообщения
      *
-    * @return string - закодированное сообщение
-    */
+     * @return string - закодированное сообщение
+     */
     public static function EncodeMessageUnicode($message)
     {
         return bin2hex(mb_convert_encoding($message, 'UCS-2', 'UTF-8'));

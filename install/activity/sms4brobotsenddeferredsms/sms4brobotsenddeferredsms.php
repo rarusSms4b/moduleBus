@@ -11,7 +11,7 @@ Loc::loadLanguageFile(__FILE__);
 /**
  * Class CBPSms4bRobotSendSms
  */
-class CBPSms4bRobotSendSms extends CBPActivity
+class CBPSms4bRobotSendDeferredSms extends CBPActivity
 {
     /**
      * Конструктор
@@ -22,8 +22,8 @@ class CBPSms4bRobotSendSms extends CBPActivity
     {
         parent::__construct($name);
         $this->arProperties = array(
-            'Title' => '',
-            'MessageText' => '',
+            "Title" => "",
+            "MessageText" => '',
             'StartSend' => ''
         );
     }
@@ -31,10 +31,14 @@ class CBPSms4bRobotSendSms extends CBPActivity
     /**
      * Выполнение бизнес-процесса
      *
-     * @return string = 'Closed'
+     * @throws \Bitrix\Main\ObjectException
+     * @throws \Bitrix\Main\ArgumentException
+     *
+     * @return string = "Closed"
      */
     public function Execute()
     {
+        Loader::includeModule('crm');
         if (!Loader::includeModule('rarus.sms4b')) {
             $this->WriteToTrackingService(Loc::getMessage('SMS4B_MODULE_NOT_FOUND'));
             return CBPActivityExecutionStatus::Closed;
@@ -56,8 +60,9 @@ class CBPSms4bRobotSendSms extends CBPActivity
             $this->WriteToTrackingService(Loc::getMessage('SMS4B_NOT_VALID'));
             return CBPActivityExecutionStatus::Closed;
         }
+
         try {
-            $result = $sms->SendSmsSaveGroup(array($phoneNumberValid => $this->MessageText));
+            $result = $sms->SendSmsSaveGroup(array($phoneNumberValid => $this->MessageText), '', $this->StartSend);
         } catch (Rarus\Sms4b\Sms4bException $e) {
             $this->WriteToTrackingService($e->getMessage());
         }
@@ -66,7 +71,7 @@ class CBPSms4bRobotSendSms extends CBPActivity
             $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_NOT_SEND'));
         } else {
             $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_SEND',
-                array('#TEXT#' => $this->MessageText, '#PHONE#' => $phoneNumberValid)));
+                array("#TEXT#" => $this->MessageText, "#PHONE#" => $phoneNumberValid)));
         }
 
         return CBPActivityExecutionStatus::Closed;
@@ -178,13 +183,21 @@ class CBPSms4bRobotSendSms extends CBPActivity
     {
         $arErrors = array();
 
-        if (empty($arTestProperties['MessageText'])) {
+        if (empty($arTestProperties["MessageText"])) {
             $arErrors[] = array(
-                'code' => 'NotExist',
-                'parameter' => 'MessageText',
-                'message' => Loc::getMessage('CRM_SSMSA_EMPTY_TEXT')
+                "code" => "NotExist",
+                "parameter" => "MessageText",
+                "message" => GetMessage("SMS4B_EMPTY_TEXT")
             );
         }
+
+//        if ($arTestProperties["StartSend"] === '') {
+//            $arErrors[] = array(
+//                "code" => "FailDeferredTime",
+//                "parameter" => "StartSend",
+//                "message" => GetMessage("SMS4B_DEFERRED_DATETIME_FAIL")
+//            );
+//        }
 
         return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
     }
@@ -209,11 +222,11 @@ class CBPSms4bRobotSendSms extends CBPActivity
         $arWorkflowParameters,
         $arWorkflowVariables,
         $arCurrentValues = null,
-        $formName = '',
+        $formName = "",
         $popupWindow = null,
         $siteId = ''
     ) {
-        if (!Loader::includeModule('crm')) {
+        if (!Loader::includeModule("crm")) {
             return '';
         }
 
@@ -251,6 +264,8 @@ class CBPSms4bRobotSendSms extends CBPActivity
      * @param $arCurrentValues array входные данные от действий БП ранее
      * @param $arErrors array массив ошибок
      *
+     * @throws \Bitrix\Main\ObjectException
+     *
      * @return bool
      */
     public static function GetPropertiesDialogValues(
@@ -259,14 +274,32 @@ class CBPSms4bRobotSendSms extends CBPActivity
         &$arWorkflowTemplate,
         &$arWorkflowParameters,
         &$arWorkflowVariables,
-        $arCurrentValues,
+        &$arCurrentValues,
         &$arErrors
     ) {
         $arErrors = Array();
 
+        Loader::includeModule('rarus.sms4b');
+        $sms = new Csms4b();
+        $sms->sms4bLog(print_r($arCurrentValues, true));
+
+        $sms->sms4bLog('$documentType = ' . print_r($documentType, true));
+        $sms->sms4bLog('$activityName = ' . print_r($activityName, true));
+        $sms->sms4bLog('$arWorkflowTemplate = ' . print_r($arWorkflowTemplate, true));
+        $sms->sms4bLog('$arWorkflowParameters = ' . print_r($arWorkflowParameters, true));
+        $sms->sms4bLog('$arWorkflowVariables = ' . print_r($arWorkflowVariables, true));
+        $sms->sms4bLog('$arErrors = ' . print_r($arErrors, true));
+
+
         $arProperties = array(
-            'MessageText' => (string)$arCurrentValues['message_text']
+            'MessageText' => (string)$arCurrentValues['message_text'],
+            'StartSend' => self::getDateStart(
+                $arCurrentValues['delay_type'],
+                $arCurrentValues['delay_value'],
+                $arCurrentValues['delay_value_type'])
         );
+
+        $arCurrentValues['delay_value'] = '';
 
         $arErrors = self::ValidateProperties($arProperties,
             new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser));
@@ -275,10 +308,37 @@ class CBPSms4bRobotSendSms extends CBPActivity
         }
 
         $arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
-        $arCurrentActivity['Properties'] = $arProperties;
+        $arCurrentActivity["Properties"] = $arProperties;
 
         return true;
     }
 
+    /**
+     * Конвертер даты из строк в
+     *
+     * @param $delayType string ти
+     * @param $delayValue string название активити
+     * @param $delayValueType string параметры шаблона
+     *
+     * @throws \Bitrix\Main\ObjectException
+     *
+     * @return string
+     */
+    private static function getDateStart($delayType, $delayValue, $delayValueType)
+    {
+        //хак, передаваемые интервалы времени имеют типы 'i' - минуты, 'h' - часы, 'd' - дни
+        //которые не поддерживаются конструктором DateInterval
+        $dateInterval = new \DateInterval('P0D');
+        $now = new \Bitrix\Main\Type\DateTime();
 
+        if ($delayType === 'after' && $delayValue !== 0) {
+            $dateInterval->$delayValueType = (int)$delayValue;
+            $dateStart = $now->add($dateInterval);
+            return $dateStart->toString();
+        }
+
+        if ($delayType === 'before') {
+
+        }
+    }
 }

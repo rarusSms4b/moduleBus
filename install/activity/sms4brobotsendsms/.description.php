@@ -7,7 +7,7 @@ Loc::loadLanguageFile(__FILE__);
 $arActivityDescription = array(
 	'NAME' => Loc::getMessage('SMS4B_ROBOT_NAME'),
 	'DESCRIPTION' => Loc::getMessage('SMS4B_ROBOT_DESC'),
-	'TYPE' => array('activity', 'robot_activity'),
+	'TYPE' => array('robot_activity'),
 	'CLASS' => 'Sms4bRobotSendSms',
 	'JSCLASS' => 'BizProcActivity',
     'CATEGORY' => array(
