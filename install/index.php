@@ -432,6 +432,8 @@ class rarus_sms4b extends CModule
             && DeleteDirFilesEx(BX_ROOT . '/activities/custom/sms4bactivitytophone')
             && DeleteDirFilesEx(BX_ROOT . '/activities/custom/sms4bactivitytocontact')
             && DeleteDirFilesEx(BX_ROOT . '/activities/custom/sms4bactivitytolead')
+            && DeleteDirFilesEx(BX_ROOT . '/activities/custom/sms4brobotsenddeferredsms')
+            && DeleteDirFilesEx(BX_ROOT . '/activities/custom/sms4brobotsendsms')
         ) {
             return true;
         } else {

@@ -24,7 +24,7 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
         $this->arProperties = array(
             "Title" => "",
             "MessageText" => '',
-            'StartSend' => ''
+            'StartSend' => '',
         );
     }
 
@@ -71,7 +71,7 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
             $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_NOT_SEND'));
         } else {
             $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_SEND',
-                array("#TEXT#" => $this->MessageText, "#PHONE#" => $phoneNumberValid)));
+                array("#TEXT#" => $this->MessageText, "#PHONE#" => $phoneNumberValid, '#DATE#' => $this->StartSend)));
         }
 
         return CBPActivityExecutionStatus::Closed;
@@ -187,17 +187,54 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
             $arErrors[] = array(
                 "code" => "NotExist",
                 "parameter" => "MessageText",
-                "message" => GetMessage("SMS4B_EMPTY_TEXT")
+                "message" => Loc::getMessage("SMS4B_EMPTY_TEXT")
             );
         }
 
-//        if ($arTestProperties["StartSend"] === '') {
-//            $arErrors[] = array(
-//                "code" => "FailDeferredTime",
-//                "parameter" => "StartSend",
-//                "message" => GetMessage("SMS4B_DEFERRED_DATETIME_FAIL")
-//            );
-//        }
+        if($arTestProperties['radioButton'] === 'after') {
+            if($arTestProperties['valAfter'] === '0' || $arTestProperties['valAfter'] === null)
+            {
+                $arErrors[] = array(
+                    "code" => "FailAfterPeriod",
+                    "parameter" => "valAfter",
+                    "message" => Loc::getMessage("SMS4B_FAIL_VAL")
+                );
+            }
+            if(!isset($arTestProperties['valTypeAfter']))
+            {
+                $arErrors[] = array(
+                    "code" => "FailAfterPeriodType",
+                    "parameter" => "valTypeAfter",
+                    "message" => Loc::getMessage("SMS4B_FAIL_VAL_TYPE")
+                );
+            }
+        }
+        elseif ($arTestProperties['radioButton'] === 'before'){
+            if($arTestProperties['valBefore'] === '0' || $arTestProperties['valBefore'] === null)
+            {
+                $arErrors[] = array(
+                    "code" => "FailBeforePeriod",
+                    "parameter" => "valBefore",
+                    "message" => Loc::getMessage("SMS4B_FAIL_VAL")
+                );
+            }
+            if(!isset($arTestProperties['valTypeBefore']))
+            {
+                $arErrors[] = array(
+                    "code" => "FailBeforePeriodType",
+                    "parameter" => "valTypeBefore",
+                    "message" => Loc::getMessage("SMS4B_FAIL_VAL_TYPE")
+                );
+            }
+        }
+        else{
+            $arErrors[] = array(
+                "code" => "FailRadio",
+                "parameter" => "radioButton",
+                "message" => Loc::getMessage("SMS4B_DEFERRED_DATETIME_FAIL")
+            );
+        }
+
 
         return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
     }
@@ -247,7 +284,40 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
                 'FieldName' => 'message_text',
                 'Type' => 'text',
                 'Required' => true
-            )
+            ),
+            'dateFields' => array(
+                'FieldName' => 'dateFields',
+                'Type' => 'select',
+                'Required' => false,
+                'Multiple' => true,
+                'Options' => array('12345' => 'Дата начала', '5235' => 'Дата конца')
+            ),
+            'radioButton' => array(
+                'FieldName' => 'sms4b_type',
+                'Type' => 'radio',
+                'Required' => true
+            ),
+            'valBefore' => array(
+                'FieldName' => 'sms4b_value_before',
+                'Type' => 'text',
+                'Required' => false
+            ),
+            'valAfter' => array(
+                'FieldName' => 'sms4b_value_after',
+                'Type' => 'text',
+                'Required' => false
+            ),
+            'valTypeBefore' => array(
+                'FieldName' => 'sms4b_value_type_before',
+                'Type' => 'radio',
+                'Required' => false
+            ),
+            'valTypeAfter' => array(
+                'FieldName' => 'sms4b_value_type_after',
+                'Type' => 'radio',
+                'Required' => false
+            ),
+
         ));
 
         return $dialog;
@@ -274,7 +344,7 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
         &$arWorkflowTemplate,
         &$arWorkflowParameters,
         &$arWorkflowVariables,
-        &$arCurrentValues,
+        $arCurrentValues,
         &$arErrors
     ) {
         $arErrors = Array();
@@ -283,23 +353,19 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
         $sms = new Csms4b();
         $sms->sms4bLog(print_r($arCurrentValues, true));
 
-        $sms->sms4bLog('$documentType = ' . print_r($documentType, true));
-        $sms->sms4bLog('$activityName = ' . print_r($activityName, true));
-        $sms->sms4bLog('$arWorkflowTemplate = ' . print_r($arWorkflowTemplate, true));
-        $sms->sms4bLog('$arWorkflowParameters = ' . print_r($arWorkflowParameters, true));
-        $sms->sms4bLog('$arWorkflowVariables = ' . print_r($arWorkflowVariables, true));
-        $sms->sms4bLog('$arErrors = ' . print_r($arErrors, true));
-
-
         $arProperties = array(
             'MessageText' => (string)$arCurrentValues['message_text'],
             'StartSend' => self::getDateStart(
-                $arCurrentValues['delay_type'],
-                $arCurrentValues['delay_value'],
-                $arCurrentValues['delay_value_type'])
+                $arCurrentValues['sms4b_type'],
+                $arCurrentValues['sms4b_value_' . $arCurrentValues['sms4b_type']],
+                $arCurrentValues['sms4b_value_type_' . $arCurrentValues['sms4b_type']]),
+            'dateFields' => $arCurrentValues['dateFields'],
+            'radioButton' => $arCurrentValues['sms4b_type'],
+            'valBefore' => $arCurrentValues['sms4b_value_before'],
+            'valAfter' => $arCurrentValues['sms4b_value_after'],
+            'valTypeBefore' => $arCurrentValues['sms4b_value_type_before'],
+            'valTypeAfter' => $arCurrentValues['sms4b_value_type_after']
         );
-
-        $arCurrentValues['delay_value'] = '';
 
         $arErrors = self::ValidateProperties($arProperties,
             new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser));
@@ -326,14 +392,10 @@ class CBPSms4bRobotSendDeferredSms extends CBPActivity
      */
     private static function getDateStart($delayType, $delayValue, $delayValueType)
     {
-        //хак, передаваемые интервалы времени имеют типы 'i' - минуты, 'h' - часы, 'd' - дни
-        //которые не поддерживаются конструктором DateInterval
-        $dateInterval = new \DateInterval('P0D');
         $now = new \Bitrix\Main\Type\DateTime();
 
-        if ($delayType === 'after' && $delayValue !== 0) {
-            $dateInterval->$delayValueType = (int)$delayValue;
-            $dateStart = $now->add($dateInterval);
+        if ($delayType === 'after') {
+            $dateStart = $now->add(new \DateInterval('PT' . $delayValue . $delayValueType));
             return $dateStart->toString();
         }
 

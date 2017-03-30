@@ -1,10 +1,7 @@
 <?
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
-    die();
-}
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
 use \Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Loader;
 
 Loc::loadLanguageFile(__FILE__);
 
@@ -14,69 +11,67 @@ Loc::loadLanguageFile(__FILE__);
 class CBPSms4bRobotSendSms extends CBPActivity
 {
     /**
-     * ÐšÐ¾Ð½ÑÑ‚Ñ€ÑƒÐºÑ‚Ð¾Ñ€
+     * Êîíñòðóêòîð
      *
-     * @param $name string - ID ÑÐºÐ·ÐµÐ¼Ð¿Ð»ÑÑ€Ð° Ð±Ð¸Ð·Ð½ÐµÑ-Ð¿Ñ€Ð¾Ñ†ÐµÑÑÐ°
+     * @param $name string - ID ýêçåìïëÿðà áèçíåñ-ïðîöåññà
      */
     public function __construct($name)
     {
         parent::__construct($name);
         $this->arProperties = array(
-            'Title' => '',
-            'MessageText' => '',
-            'StartSend' => ''
+            "Title" => "",
+            "MessageText" => '',
         );
     }
 
     /**
-     * Ð’Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ðµ Ð±Ð¸Ð·Ð½ÐµÑ-Ð¿Ñ€Ð¾Ñ†ÐµÑÑÐ°
+     * Âûïîëíåíèå ðîáîòà
      *
-     * @return string = 'Closed'
+     * @throws \Bitrix\Main\ObjectException - Èñêëþ÷åíèÿ ñîçäàíèÿ îáúåêòîâ
+     * @throws \Bitrix\Main\ArgumentException - Èñêëþ÷åíèÿ ïåðåäàííûõ àðãóìåíòîâ
+     *
+     * @return string = "Closed"
      */
     public function Execute()
     {
-        if (!Loader::includeModule('rarus.sms4b')) {
-            $this->WriteToTrackingService(Loc::getMessage('SMS4B_MODULE_NOT_FOUND'));
+        if (!CModule::IncludeModule('rarus.sms4b')) {
+            $this->WriteToTrackingService(Loc::getMessage('SMS4B_INCLUDE_MODULE_FAIL_EXEC')
+                . '. ' . Loc::getMessage('SMS4B_SMS_NOT_SEND_EXEC'));
             return CBPActivityExecutionStatus::Closed;
         }
-
-        if (!$this->MessageText || $this->MessageText === '') {
-            $this->WriteToTrackingService(Loc::getMessage('SMS4B_EMPTY_TEXT'));
-            return CBPActivityExecutionStatus::Closed;
-        }
-
         $sms = new Csms4b();
-        $phoneNumber = $this->getPhoneNumber();
-        $phoneNumberValid = $sms->is_phone($phoneNumber);
+        $phoneNumber = $sms->is_phone($this->getPhoneNumber());
 
-        if ($phoneNumber === null) {
-            $this->WriteToTrackingService(Loc::getMessage('SMS4B_EMPTY_PHONE'));
-            return CBPActivityExecutionStatus::Closed;
-        } elseif ($phoneNumberValid === false) {
-            $this->WriteToTrackingService(Loc::getMessage('SMS4B_NOT_VALID'));
+        if ($this->MessageText === '') {
+            $this->WriteToTrackingService(Loc::getMessage('SMS4B_EMPTY_TEXT_EXEC')
+                . '. ' . Loc::getMessage('SMS4B_SMS_NOT_SEND_EXEC'));
             return CBPActivityExecutionStatus::Closed;
         }
-        try {
-            $result = $sms->SendSmsSaveGroup(array($phoneNumberValid => $this->MessageText));
-        } catch (Rarus\Sms4b\Sms4bException $e) {
-            $this->WriteToTrackingService($e->getMessage());
+        if ($phoneNumber === false) {
+            $this->WriteToTrackingService(Loc::getMessage('SMS4B_INVALID_PHONE_EXEC') . ' ' . "($phoneNumber)"
+                . '. ' . Loc::getMessage('SMS4B_SMS_NOT_SEND_EXEC'));
+            return CBPActivityExecutionStatus::Closed;
         }
 
-        if ($result[0]['Result'] <= 0) {
-            $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_NOT_SEND'));
+        $senResult = $sms->SendSmsSaveGroup([$phoneNumber => $this->MessageText]);
+
+        if ($senResult[0]['Result'] <= 0) {
+            $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_NOT_SEND_EXEC')
+                . '. ' . \Rarus\Sms4b\Sms4bClient::GetCodeDescription($senResult[0]['Result']));
         } else {
-            $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_SEND',
-                array('#TEXT#' => $this->MessageText, '#PHONE#' => $phoneNumberValid)));
+            $this->WriteToTrackingService(Loc::getMessage('SMS4B_SMS_SUCCESS_SEND_EXEC')
+                . ' ' . Loc::getMessage('SMS4B_SMS_SEND_WITH_TEXT_EXEC') . $this->MessageText
+                . ' ' . Loc::getMessage('SMS4B_SMS_SEND_TO_PHONE_EXEC') . $phoneNumber
+            );
         }
 
         return CBPActivityExecutionStatus::Closed;
     }
 
     /**
+     * Ïîëó÷èòü òåëåôîí äëÿ òåêóùåãî ýêçåìïëÿðà ñóùíîñòè (êîíêðåòíûé ëèä èëè ñäåëêà)
      *
-     * ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð½Ð¾Ð¼ÐµÑ€ Ñ‚ÐµÐ»ÐµÑ„Ð¾Ð½Ð°
-     *
-     * @return string|null
+     * @return string
      */
     private function getPhoneNumber()
     {
@@ -88,8 +83,7 @@ class CBPSms4bRobotSendSms extends CBPActivity
                 $communications = $this->getDealCommunications((int)str_replace('DEAL_', '', $documentId[2]));
                 break;
             case 'CCrmDocumentLead':
-                $communications = $this->getCommunicationsFromFM(CCrmOwnerType::Lead,
-                    (int)str_replace('LEAD_', '', $documentId[2]));
+                $communications = $this->getCommunicationsFromFM(CCrmOwnerType::Lead, (int)str_replace('LEAD_', '', $documentId[2]));
                 break;
         }
 
@@ -98,16 +92,16 @@ class CBPSms4bRobotSendSms extends CBPActivity
     }
 
     /**
-     * ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¼Ð°ÑÑÐ¸Ð² Ñ‚ÐµÐ»ÐµÑ„Ð¾Ð½Ð¾Ð² Ð¿Ð¾ ÑÐ´ÐµÐ»ÐºÐµ
+     * Ïîëó÷åíèå ìàññèâà òåëåôîíîâ ñäåëêè
      *
-     * @param $id int ID ÑÐ´ÐµÐ»ÐºÐ¸
+     * @param $id int ID ñäåëêè
      * @return array
      */
     private function getDealCommunications($id)
     {
         $communications = array();
 
-        $entity = CCrmDeal::GetByID($id, false);
+        $entity = CCrmDeal::GetByID($id);
         if (!$entity) {
             return array();
         }
@@ -127,11 +121,10 @@ class CBPSms4bRobotSendSms extends CBPActivity
     }
 
     /**
-     * ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¼Ð°ÑÑÐ¸Ð² Ñ‚ÐµÐ»ÐµÑ„Ð¾Ð½Ð¾Ð²
+     * Ïîëó÷åíèå ìàññèâà òåëåôîíîâ èç FieldMulti
      *
-     * @param $entityTypeId int ID Ñ‚Ð¸Ð¿Ð° ÑÑƒÑ‰Ð½Ð¾ÑÑ‚Ð¸
-     * @param $entityId int ID Ð¸Ð½ÑÑ‚Ð°Ð½ÑÐ° ÑÐ¹Ñ‰Ð½Ð¾ÑÑ‚Ð¸
-     *
+     * @param $entityTypeId int ID òèïà ñóùíîñòè (ñäåëêà èëè ëèä)
+     * @param $entityId int ID ýêçåìïëÿðà ñóùíîñòè (ID ñäåëêè èëè ëèäà)
      * @return array
      */
     private function getCommunicationsFromFM($entityTypeId, $entityId)
@@ -141,17 +134,15 @@ class CBPSms4bRobotSendSms extends CBPActivity
 
         $iterator = CCrmFieldMulti::GetList(
             array('ID' => 'asc'),
-            array(
-                'ENTITY_ID' => $entityTypeName,
+            array('ENTITY_ID' => $entityTypeName,
                 'ELEMENT_ID' => $entityId,
                 'TYPE_ID' => 'PHONE'
             )
         );
 
         while ($row = $iterator->fetch()) {
-            if (empty($row['VALUE'])) {
+            if (empty($row['VALUE']))
                 continue;
-            }
 
             $communications[] = array(
                 'ENTITY_ID' => $entityId,
@@ -167,55 +158,41 @@ class CBPSms4bRobotSendSms extends CBPActivity
     }
 
     /**
-     * ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ñ…
+     * Ïðîâåðêà ïåðåìåííûõ
      *
-     * @param $arTestProperties array Ð¼Ð°ÑÑÐ¸Ð² Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼Ñ‹Ñ… Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ð¹
-     * @param $user CBPWorkflowTemplateUser Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ CBPWorkflowTemplateUser
+     * @param $arTestProperties array ìàññèâ ïðîâåðÿåìûõ çíà÷åíèé
+     * @param $user CBPWorkflowTemplateUser îáúåêò ïîëüçîâàòåëÿ CBPWorkflowTemplateUser
      *
-     * @return array - Ð¼Ð°ÑÑÐ¸Ð² Ñ Ð¾ÑˆÐ¸Ð±ÐºÐ°Ð¼Ð¸ Ð¸Ð»Ð¸ Ð¿ÑƒÑÑ‚Ð¾Ð¹
+     * @return array - ìàññèâ ñ îøèáêàìè èëè ïóñòîé
      */
-    public static function ValidateProperties(array $arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
+    public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
     {
         $arErrors = array();
 
-        if (empty($arTestProperties['MessageText'])) {
-            $arErrors[] = array(
-                'code' => 'NotExist',
-                'parameter' => 'MessageText',
-                'message' => Loc::getMessage('CRM_SSMSA_EMPTY_TEXT')
-            );
+        if (empty($arTestProperties["MessageText"])) {
+            $arErrors[] = array("code" => "NotExist", "parameter" => "MessageText", "message" => Loc::getMessage('SMS4B_EMPTY_TEXT'));
         }
 
         return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
     }
 
     /**
-     * ÐŸÐµÑ€ÐµÐ´Ð°Ñ‡Ð° Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð² Ð´Ð¸Ð°Ð»Ð¾Ð³
+     * Ïåðåäà÷à äàííûõ â äèàëîã
      *
-     * @param $documentType array Ñ‚Ð¸Ð¿ Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚Ð°
-     * @param $activityName string Ð½Ð°Ð·Ð²Ð°Ð½Ð¸Ðµ Ð°ÐºÑ‚Ð¸Ð²Ð¸Ñ‚Ð¸
-     * @param $arWorkflowTemplate array Ð¿Ð°Ñ€Ð°Ð¼ÐµÑ‚Ñ€Ñ‹ ÑˆÐ°Ð±Ð»Ð¾Ð½Ð°
-     * @param $arWorkflowParameters array Ð¿Ð¾Ð»Ñ Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚Ð°
-     * @param $arWorkflowVariables array Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ðµ
-     * @param $arCurrentValues array Ð²Ñ…Ð¾Ð´Ð½Ñ‹Ðµ Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð¾Ñ‚ Ð´ÐµÐ¹ÑÑ‚Ð²Ð¸Ð¹ Ð‘ÐŸ Ñ€Ð°Ð½ÐµÐµ
-     * @param $formName string Ð¸Ð¼Ñ Ñ„Ð¾Ñ€Ð¼Ñ‹
+     * @param $documentType array òèï äîêóìåíòà
+     * @param $activityName string íàçâàíèå àêòèâèòè
+     * @param $arWorkflowTemplate array ïàðàìåòðû øàáëîíà
+     * @param $arWorkflowParameters array ïîëÿ äîêóìåíòà
+     * @param $arWorkflowVariables array ïåðåìåííûå
+     * @param $arCurrentValues array âõîäíûå äàííûå îò äåéñòâèé ÁÏ ðàíåå
+     * @param $formName string èìÿ ôîðìû
      *
-     * @return string Ð¡Ð²Ð¾Ð¹ÑÑ‚Ð²Ð° Ð´Ð¸Ð°Ð»Ð¾Ð³Ð°
+     * @return string - Ñâîéñòâà äèàëîãà
      */
-    public static function GetPropertiesDialog(
-        $documentType,
-        $activityName,
-        $arWorkflowTemplate,
-        $arWorkflowParameters,
-        $arWorkflowVariables,
-        $arCurrentValues = null,
-        $formName = '',
-        $popupWindow = null,
-        $siteId = ''
-    ) {
-        if (!Loader::includeModule('crm')) {
+    public static function GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $arCurrentValues = null, $formName = "", $popupWindow = null, $siteId = '')
+    {
+        if (!CModule::IncludeModule("crm"))
             return '';
-        }
 
         $dialog = new \Bitrix\Bizproc\Activity\PropertiesDialog(__FILE__, array(
             'documentType' => $documentType,
@@ -241,44 +218,33 @@ class CBPSms4bRobotSendSms extends CBPActivity
     }
 
     /**
-     * ÐŸÐ¾Ð»ÑƒÑ‡ÐµÐ½Ð¸Ðµ Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð´Ð¸Ð°Ð»Ð¾Ð³Ð°
+     * Ïîëó÷åíèå äàííûõ äèàëîãà
      *
-     * @param $documentType array Ñ‚Ð¸Ð¿ Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚Ð°
-     * @param $activityName string Ð½Ð°Ð·Ð²Ð°Ð½Ð¸Ðµ Ð°ÐºÑ‚Ð¸Ð²Ð¸Ñ‚Ð¸
-     * @param $arWorkflowTemplate array Ð¿Ð°Ñ€Ð°Ð¼ÐµÑ‚Ñ€Ñ‹ ÑˆÐ°Ð±Ð»Ð¾Ð½Ð°
-     * @param $arWorkflowParameters array Ð¿Ð¾Ð»Ñ Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚Ð°
-     * @param $arWorkflowVariables array Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ðµ
-     * @param $arCurrentValues array Ð²Ñ…Ð¾Ð´Ð½Ñ‹Ðµ Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð¾Ñ‚ Ð´ÐµÐ¹ÑÑ‚Ð²Ð¸Ð¹ Ð‘ÐŸ Ñ€Ð°Ð½ÐµÐµ
-     * @param $arErrors array Ð¼Ð°ÑÑÐ¸Ð² Ð¾ÑˆÐ¸Ð±Ð¾Ðº
+     * @param $documentType array òèï äîêóìåíòà
+     * @param $activityName string íàçâàíèå àêòèâèòè
+     * @param $arWorkflowTemplate array ïàðàìåòðû øàáëîíà
+     * @param $arWorkflowParameters array ïîëÿ äîêóìåíòà
+     * @param $arWorkflowVariables array ïåðåìåííûå
+     * @param $arCurrentValues array âõîäíûå äàííûå îò äåéñòâèé ÁÏ ðàíåå
+     * @param $arErrors array ìàññèâ îøèáîê
      *
      * @return bool
      */
-    public static function GetPropertiesDialogValues(
-        $documentType,
-        $activityName,
-        &$arWorkflowTemplate,
-        &$arWorkflowParameters,
-        &$arWorkflowVariables,
-        $arCurrentValues,
-        &$arErrors
-    ) {
+    public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate, &$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$arErrors)
+    {
         $arErrors = Array();
 
         $arProperties = array(
-            'MessageText' => (string)$arCurrentValues['message_text']
+            'MessageText' => (string)$arCurrentValues["message_text"],
         );
 
-        $arErrors = self::ValidateProperties($arProperties,
-            new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser));
-        if (count($arErrors) > 0) {
+        $arErrors = self::ValidateProperties($arProperties, new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser));
+        if (count($arErrors) > 0)
             return false;
-        }
 
         $arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
-        $arCurrentActivity['Properties'] = $arProperties;
+        $arCurrentActivity["Properties"] = $arProperties;
 
         return true;
     }
-
-
 }
